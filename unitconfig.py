@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-# version: 2023-02-12
+# version: 2023-07-18
 
 import argparse
 import json
@@ -141,20 +141,21 @@ SCHEMA_CONFIG_KEYS = {
 
 # check, read and merge json-files config
 def get_filesconfig(configs_path) -> dict:
-    _print(2, "get files config (%s)..." % configs_path)
+    _print(2, f"get files config ({configs_path})...")
     filesconfig = {}
     for fn in sorted(os.listdir(configs_path)):  # sorted is for unambiguity
         fna = os.path.join(configs_path, fn)
         with open(fna, "rb") as f:
+            _print(2, f"- {fn}")
             try:
                 fdata = json.load(f)
             except Exception as e:
-                exit("error load file config \"%s\": %s" % (fna, repr(e)))
+                exit(f"error load file config \"{fna}\": {repr(e)}")
             if not isinstance(fdata, dict):
-                exit("error file config \"%s\": json is not dict" % (fna))
+                exit(f"error file config \"{fna}\": json is not dict")
             for conf_k, conf_v in fdata.items():
                 if conf_k not in SCHEMA_CONFIG_KEYS:
-                    exit("error file config \"%s\": config key \"%s\" unknown" % (fna, conf_k))
+                    exit(f"""error file config "{fna}": config key "{conf_k}" unknown""")
                 c_type, c_func_merge, _ = SCHEMA_CONFIG_KEYS[conf_k]
                 if not isinstance(conf_v, c_type):
                     exit("error file config \"%s\": config key \"%s\" is type %s, not %s" % (fna, conf_k, type(conf_v), c_type))
@@ -173,22 +174,22 @@ RE_HTTP_FIRST = re.compile("HTTP/[\d\.]+\s+(\d+)\s+")
 
 
 def http_request(http_method: str, http_path: str, data: str=None) -> Tuple[int, str]:
-    _print(2, f"http {http_method} {http_path}...")
+    _print(2, f"http: {http_method} {http_path}...")
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
-        _print(2, f"http connect {sock_path}...")
+        _print(2, f"http: connect {sock_path}...")
         client.connect(sock_path)
         http_request = "%s %s HTTP/1.0\nHost: none\nConnection: close\n\n%s" % (http_method, http_path, data or "")
-        _print(2, "http client send...")
+        _print(2, "http: client send...")
         client.sendall(http_request.encode("utf-8"))
         data = bytearray()
-        _print(2, "http client recv...")
+        _print(2, "http: client recv...")
         while True:
             part = client.recv(4096)
             if not part:
                 break
             data.extend(part)
+    _print(2, f"http: receive {len(data)} bytes")
     data = data.decode("utf-8")
-    _print(2, f"http receive {len(data)} bytes")
     # HTTP/1.1 200 OK
     # HTTP/1.1 404 Not Found
     # {
@@ -196,10 +197,10 @@ def http_request(http_method: str, http_path: str, data: str=None) -> Tuple[int,
     # }
     m = RE_HTTP_FIRST.search(data)
     if not m:
-        exit("error http response %s %s? %s" % (http_method, http_path, data))
+        exit(f"invalid http response {http_method} {http_path}? {data}")
     http_code = int(m.group(1))
     body_idx = data.find("\r\n\r\n")
-    _print(2, "http code: %d" % http_code)
+    _print(2, f"http: code {http_code}")
     return http_code, data[body_idx + 4:]
 
 
@@ -208,7 +209,7 @@ def json_request(http_method: str, http_path: str, data=None):
         data = json.dumps(data)
     code, body = http_request(http_method, http_path, data)
     if code != 200:
-        exit("error http response %s %s: http code is %s: %s" % (http_method, http_path, code, body))
+        exit(f"error http response {http_method} {http_path}: http code {code}: {body}")
     return json.loads(body)
 
 
